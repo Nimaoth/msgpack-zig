@@ -1,0 +1,6 @@
+[submodule "deps/time"]
+	path = deps/time
+	url = https://github.com/gernest/time
+[submodule "deps/yaml"]
+	path = deps/yaml
+	url = https://github.com/kubkon/zig-yaml
