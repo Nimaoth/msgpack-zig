@@ -14,6 +14,7 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("zig-msgpack", "src/main.zig");
     exe.addPackage(.{ .name = "time", .path = "deps/time/src/time.zig" });
     exe.addPackage(.{ .name = "yaml", .path = "deps/yaml/src/main.zig" });
+    exe.addBuildOption([]const u8, "TEST_INPUT_PATH", b.pathFromRoot("tests"));
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();

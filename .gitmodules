@@ -4,3 +4,6 @@
 [submodule "deps/yaml"]
 	path = deps/yaml
 	url = https://github.com/kubkon/zig-yaml
+[submodule "deps/msgpack-test-suite"]
+	path = deps/msgpack-test-suite
+	url = https://github.com/kawanet/msgpack-test-suite

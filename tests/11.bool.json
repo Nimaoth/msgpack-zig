@@ -1,0 +1,14 @@
+[
+  {
+    "bool": false,
+    "msgpack": [
+      "c2"
+    ]
+  },
+  {
+    "bool": true,
+    "msgpack": [
+      "c3"
+    ]
+  }
+]
