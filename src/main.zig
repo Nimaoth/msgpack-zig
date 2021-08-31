@@ -1,6 +1,5 @@
 const std = @import("std");
 const time = @import("time");
-const yaml = @import("yaml");
 
 usingnamespace @import("writer.zig");
 usingnamespace @import("reader.zig");
