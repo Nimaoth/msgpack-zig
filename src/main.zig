@@ -65,12 +65,11 @@ pub fn main() anyerror!void {
         std.log.info("{s}", .{entry.name});
 
         var file = try testDir.openFile(entry.name, .{ .read = true });
-        var reader = file.reader();
+        var fileReader = file.reader();
 
         // read entire file
         fileContentBuffer.clearRetainingCapacity();
-        try reader.readAllArrayList(&fileContentBuffer, std.math.maxInt(usize));
-        //std.debug.print("---\n{s}\n---\n", .{fileContentBuffer.items});
+        try fileReader.readAllArrayList(&fileContentBuffer, std.math.maxInt(usize));
 
         var parser = std.json.Parser.init(&gpa.allocator, false);
         defer parser.deinit();
@@ -97,20 +96,110 @@ pub fn main() anyerror!void {
                 try possibleEncodings.append(encoding.toOwnedSlice());
             }
 
+            var decodedEncodings = try std.ArrayList(std.json.Value).initCapacity(&arena.allocator, msgpackEncodingsJson.items.len);
+            for (possibleEncodings.items) |possibleEncoding| {
+                //std.debug.print("READ: {}\n", .{std.fmt.fmtSliceHexLower(possibleEncoding)});
+                var tempStream = std.io.fixedBufferStream(possibleEncoding);
+                var reader = msgPackReader(tempStream.reader());
+                const value = try reader.readJson(&arena.allocator);
+
+                try decodedEncodings.append(value.root);
+
+                tempStream = std.io.fixedBufferStream(possibleEncoding);
+                reader = msgPackReader(tempStream.reader());
+                const msgPackValue = try reader.readValue(&arena.allocator);
+                std.debug.print("  TEST: ", .{});
+                try msgPackValue.root.stringify(.{}, std.io.getStdErr().writer());
+                std.debug.print("\n", .{});
+            }
+
             // encode the value from the test
             stream.reset();
             var msgPack = msgPackWriter(stream.writer(), .{});
-            if (testObject.get("nil")) |_| {
-                try msgPack.writeNil();
-            } else if (testObject.get("bool")) |boolJson| {
-                try msgPack.writeBool(boolJson.Bool);
-            } else if (testObject.get("string")) |stringJson| {
-                try msgPack.writeString(stringJson.String);
-            } else if (testObject.get("timestamp")) |timestampJson| {
-                const timestampArray = timestampJson.Array.items;
-                const sec = timestampArray[0].Integer;
-                const nsec = timestampArray[1].Integer;
-                try msgPack.writeTimestamp(sec, @intCast(u32, nsec));
+            const valueToEncode: std.json.Value = blk: {
+                if (testObject.get("nil")) |value| {
+                    try msgPack.writeJson(value);
+                    break :blk value;
+                } else if (testObject.get("bool")) |value| {
+                    try msgPack.writeJson(value);
+                    break :blk value;
+                } else if (testObject.get("string")) |value| {
+                    try msgPack.writeJson(value);
+                    break :blk value;
+                } else if (testObject.get("number")) |value| {
+                    try msgPack.writeJson(value);
+                    break :blk value;
+                } else if (testObject.get("array")) |array| {
+                    try msgPack.writeJson(array);
+                    break :blk array;
+                } else if (testObject.get("map")) |map| {
+                    try msgPack.writeJson(map);
+                    break :blk map;
+                } else if (testObject.get("timestamp")) |timestampJson| {
+                    const timestampArray = timestampJson.Array.items;
+                    const sec = timestampArray[0].Integer;
+                    const nsec = timestampArray[1].Integer;
+                    try msgPack.writeTimestamp(sec, @intCast(u32, nsec));
+                    break :blk timestampJson;
+                } else if (testObject.get("bignum")) |numberJson| {
+                    switch (numberJson) {
+                        .String => |stringValue| {
+                            if (std.fmt.parseInt(i64, stringValue, 10)) |value| {
+                                try msgPack.writeInt(value);
+                            } else |_| {
+                                try msgPack.writeInt(try std.fmt.parseInt(u64, stringValue, 10));
+                            }
+                        },
+
+                        else => {
+                            std.log.err("Failed to test number: {}", .{numberJson});
+                        },
+                    }
+                    break :blk numberJson;
+                } else if (testObject.get("binary")) |binaryJson| {
+                    var encoding = std.ArrayList(u8).init(&gpa.allocator);
+                    defer encoding.deinit();
+                    var iter = std.mem.tokenize(binaryJson.String, "-");
+                    while (iter.next()) |byte| {
+                        try encoding.append(try std.fmt.parseInt(u8, byte, 16));
+                    }
+                    try msgPack.writeBytes(encoding.items);
+                    break :blk binaryJson;
+                } else if (testObject.get("ext")) |extJson| {
+                    const extArray = extJson.Array.items;
+                    const typ = extArray[0].Integer;
+                    const bytes = extArray[1].String;
+                    var encoding = std.ArrayList(u8).init(&gpa.allocator);
+                    defer encoding.deinit();
+                    var iter = std.mem.tokenize(bytes, "-");
+                    while (iter.next()) |byte| {
+                        try encoding.append(try std.fmt.parseInt(u8, byte, 16));
+                    }
+                    try msgPack.writeExt(@intCast(i8, typ), encoding.items);
+                    break :blk extJson;
+                } else {
+                    return error.InvalidTestFile;
+                }
+            };
+
+            { // Test decoding
+                var valueString = std.ArrayList(u8).init(&arena.allocator);
+                var decodedString = std.ArrayList(u8).init(&arena.allocator);
+
+                try valueToEncode.jsonStringify(.{}, valueString.writer());
+
+                // Compare value to all decoded values in decodedEncodings
+                for (decodedEncodings.items) |decodedValue, k| {
+                    decodedString.clearRetainingCapacity();
+                    try decodedValue.jsonStringify(.{}, decodedString.writer());
+
+                    // check if equal
+                    if (!std.mem.eql(u8, valueString.items, decodedString.items)) {
+                        std.debug.print("  DECODE FAIL: {} -> {s}, expected {s}\n", .{ std.fmt.fmtSliceHexUpper(possibleEncodings.items[k]), decodedString.items, valueString.items });
+                    } else {
+                        //std.debug.print("  DECODE OK  : {} -> {s}, expected {s}\n", .{ std.fmt.fmtSliceHexUpper(possibleEncodings.items[k]), decodedString.items, valueString.items });
+                    }
+                }
             }
 
             const myEncodedData = encodingBuffer[0..try stream.getPos()];
@@ -124,17 +213,20 @@ pub fn main() anyerror!void {
                 }
             }
 
-            if (foundMatchingEncoding) {} else {
+            if (foundMatchingEncoding) {
+                //std.debug.print("  ENCODE OK  : ", .{});
+                //try testCaseJson.jsonStringify(.{}, std.io.getStdErr().writer());
+                //std.debug.print("\n", .{});
+            } else {
+                std.debug.print("  ENCODE FAIL: ", .{});
                 try testCaseJson.jsonStringify(.{}, std.io.getStdErr().writer());
                 std.debug.print("\n", .{});
 
-                //std.log.info("our: {s}", .{myEncodedData});
-                //std.log.info("our: {}", .{std.fmt.fmtSliceHexLower(myEncodedData)});
+                std.log.info("our: {s}", .{myEncodedData});
+                std.log.info("our: {}", .{std.fmt.fmtSliceHexLower(myEncodedData)});
                 std.log.err("Encoding failed.", .{});
             }
         }
-
-        //if (i == 1) break;
     }
 }
 

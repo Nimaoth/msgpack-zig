@@ -283,6 +283,32 @@ pub fn MsgPackWriter(comptime WriterType: anytype, comptime Fast: bool) type {
                 },
             }
         }
+        pub fn writeJson(self: *Self, json: std.json.Value) anyerror!void {
+            switch (json) {
+                .Null => try self.writeNil(),
+                .Bool => |value| try self.writeBool(value),
+                .Integer => |value| try self.writeInt(value),
+                .Float => |value| try self.writeFloat(value),
+                .NumberString => |value| {},
+                .String => |value| try self.writeString(value),
+                .Array => |array| {
+                    try self.beginArray(array.items.len);
+
+                    for (array.items) |valueJson| {
+                        try self.writeJson(valueJson);
+                    }
+                },
+                .Object => |object| {
+                    try self.beginMap(object.count());
+
+                    var iter = object.iterator();
+                    while (iter.next()) |mapEntry| {
+                        try self.writeString(mapEntry.key_ptr.*);
+                        try self.writeJson(mapEntry.value_ptr.*);
+                    }
+                },
+            }
+        }
     };
 }
 

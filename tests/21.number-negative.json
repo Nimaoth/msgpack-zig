@@ -6,9 +6,7 @@
       "d0-ff",
       "d1-ff-ff",
       "d2-ff-ff-ff-ff",
-      "d3-ff-ff-ff-ff-ff-ff-ff-ff",
-      "ca-bf-80-00-00",
-      "cb-bf-f0-00-00-00-00-00-00"
+      "d3-ff-ff-ff-ff-ff-ff-ff-ff"
     ]
   },
   {
@@ -18,9 +16,7 @@
       "d0-e0",
       "d1-ff-e0",
       "d2-ff-ff-ff-e0",
-      "d3-ff-ff-ff-ff-ff-ff-ff-e0",
-      "ca-c2-00-00-00",
-      "cb-c0-40-00-00-00-00-00-00"
+      "d3-ff-ff-ff-ff-ff-ff-ff-e0"
     ]
   },
   {
@@ -68,8 +64,7 @@
     "number": -2147483648,
     "msgpack": [
       "d2-80-00-00-00",
-      "d3-ff-ff-ff-ff-80-00-00-00",
-      "cb-c1-e0-00-00-00-00-00-00"
+      "d3-ff-ff-ff-ff-80-00-00-00"
     ]
   }
 ]
